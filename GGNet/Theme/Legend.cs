@@ -34,16 +34,12 @@
                     Direction = Horizontal;
                 }
 
-                var color = dark ? "#929299" : "#2b2b2b";
+                var color = dark ? "#929299" : "#212529";
 
                 Title = new Text
                 {
                     Anchor = start,
-                    Size = new Size
-                    {
-                        Value = 0.75,
-                        Units = em
-                    },
+                    Size = new Size(0.75),
                     Weight = "bold",
                     Color = color
                 };
@@ -54,11 +50,7 @@
                 Labels = new Text
                 {
                     Anchor = start,
-                    Size = new Size
-                    {
-                        Value = 0.75,
-                        Units = em
-                    },
+                    Size = new Size(0.75),
                     Color = color
                 };
 

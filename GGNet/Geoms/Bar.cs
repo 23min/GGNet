@@ -22,7 +22,6 @@ namespace GGNet.Geoms
         }
 
         private readonly SortedBuffer<(double x, Buffer<(T item, string fill, double value)> y)> bars = new SortedBuffer<(double x, Buffer<(T item, string fill, double value)> y)>(32, 1, Comparer.Instance);
-        private readonly Dictionary<T, (double x, double y)> tooltips = new Dictionary<T, (double x, double y)>();
 
         private readonly PositionAdjustment position;
         private readonly double width;
@@ -38,9 +37,10 @@ namespace GGNet.Geoms
             PositionAdjustment position = PositionAdjustment.Stack,
             double width = 0.9,
             bool animation = false,
+            (bool x, bool y)? scale = null,
             bool inherit = true,
             Buffer<Shape> layer = null)
-            : base(source, inherit, layer)
+            : base(source, scale, inherit, layer)
         {
             Selectors = new _Selectors
             {
@@ -93,6 +93,8 @@ namespace GGNet.Geoms
 
         public Func<T, MouseEventArgs, Task> OnMouseOut { get; set; }
 
+        private Func<T, double, double, MouseEventArgs, Task> onMouseOver;
+
         public Elements.Rectangle Aesthetic { get; set; }
 
         public override void Init<T1, TX1, TY1>(Data<T1, TX1, TY1>.Panel panel, Facet<T1> facet)
@@ -119,9 +121,8 @@ namespace GGNet.Geoms
 
             if (OnMouseOver == null && OnMouseOut == null && Selectors.Tooltip != null)
             {
-                OnMouseOver = (item, _) =>
+                onMouseOver = (item, x, y, _) =>
                 {
-                    var (x, y) = tooltips[item];
                     panel.Component.Tooltip.Show(
                         x,
                         y,
@@ -139,6 +140,10 @@ namespace GGNet.Geoms
 
                     return Task.CompletedTask;
                 };
+            }
+            else if (OnMouseOver != null)
+            {
+                onMouseOver = (item, _, __, e) => OnMouseOver(item, e);
             }
 
             if (!inherit)
@@ -226,16 +231,16 @@ namespace GGNet.Geoms
             }
         }
 
-        private void Interactivity(Rectangle rect, T item)
+        private void Interactivity(Rectangle rect, T item, double x, double y)
         {
             if (OnClick != null)
             {
                 rect.OnClick = e => OnClick(item, e);
             }
 
-            if (OnMouseOver != null)
+            if (onMouseOver != null)
             {
-                rect.OnMouseOver = e => OnMouseOver(item, e);
+                rect.OnMouseOver = e => onMouseOver(item, x, y, e);
             }
 
             if (OnMouseOut != null)
@@ -285,17 +290,22 @@ namespace GGNet.Geoms
                             }
                         };
 
-                        Interactivity(rect, item);
+                        Interactivity(rect, item, sum + value, x);
 
                         Layer.Add(rect);
-
-                        tooltips[item] = (sum + value, x);
 
                         sum += value;
                     }
 
-                    Positions.X.Position.Shape(0, sum);
-                    Positions.Y.Position.Shape(x - delta, x + delta);
+                    if (scale.x)
+                    {
+                        Positions.X.Position.Shape(0, sum);
+                    }
+
+                    if (scale.y)
+                    {
+                        Positions.Y.Position.Shape(x - delta, x + delta);
+                    }
                 }
             }
             else
@@ -325,15 +335,20 @@ namespace GGNet.Geoms
 
                         Layer.Add(rect);
 
-                        Interactivity(rect, item);
-
-                        tooltips[item] = (x, sum + value);
+                        Interactivity(rect, item, x, sum + value);
 
                         sum += value;
                     }
 
-                    Positions.X.Position.Shape(x - delta, x + delta);
-                    Positions.Y.Position.Shape(0, sum);
+                    if (scale.x)
+                    {
+                        Positions.X.Position.Shape(x - delta, x + delta);
+                    }
+
+                    if (scale.y)
+                    {
+                        Positions.Y.Position.Shape(0, sum);
+                    }
                 }
             }
         }
@@ -386,22 +401,26 @@ namespace GGNet.Geoms
                             }
                         };
 
-                        Interactivity(rect, item);
+                        Interactivity(rect, item, x + w / 2.0, value);
 
                         Layer.Add(rect);
 
-                        Positions.X.Position.Shape(x, x + w);
-
-                        if (value >= 0)
+                        if (scale.x)
                         {
-                            Positions.Y.Position.Shape(0, value);
-                        }
-                        else
-                        {
-                            Positions.Y.Position.Shape(value, 0);
+                            Positions.X.Position.Shape(x, x + w);
                         }
 
-                        tooltips[item] = (x + w / 2.0, value);
+                        if (scale.y)
+                        {
+                            if (value >= 0)
+                            {
+                                Positions.Y.Position.Shape(0, value);
+                            }
+                            else
+                            {
+                                Positions.Y.Position.Shape(value, 0);
+                            }
+                        }
 
                         x += w;
                     }
@@ -427,8 +446,9 @@ namespace GGNet.Geoms
 
         public override void Clear()
         {
+            base.Clear();
+
             bars.Clear();
-            tooltips.Clear(); 
         }
     }
 }

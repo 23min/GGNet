@@ -1,168 +1,129 @@
 ﻿@page "/covid19"
-@inject HttpClient Http
 
-@using System.Text.Json
+@inject HttpClient Http
+@inject NavigationManager Navigation
 
 @using NodaTime
-@using NodaTime.Serialization.SystemTextJson
 
 @using GGNet
+@using GGNet.Components
 
-<h3>Covid19: @country</h3>
-
-@if (data == null)
+@if (plot != null)
 {
-    <p><em>Loading...</em></p>
-}
-else
-{
-    <div class="row">
-        <div class="col-6">
-            <div class="border rounded-lg p-1">
-                <GGNet.Components.Plot Data=@map T=TS TX=Double TY=Double Width="720" Height="360" />
-            </div>
-        </div>
+    <div style="width: 720px;">
+        <Plot Data=@plot T=TS TX=Double TY=Double Width=720 Height=576 />
+    </div>
 
+    <div style="width: 720px;">
+        <Plot Data=@plot2 T="(TS, double)" TX=Double TY=Double Width=720 Height=576 />
+    </div>
 
-        <div class="col-6">
-            <div class="border rounded-lg p-1">
-                <div style="visibility: @(clicked ? "visible" : "hidden")">
-                    <GGNet.Components.Plot Data=@ts T=StatPoint TX=LocalDate TY=Double RenderPolicy=RenderPolicy.Auto @ref=@plot />
-                </div>
-            </div>
-        </div>
+    <div style="width: 720px;">
+        <Plot Data=@plot3 T="(TS, double)" TX=Double TY=Double Width=720 Height=576 />
+    </div>
+
+    <div style="width: 720px;">
+        <Plot Data=@plot4 T="(TS, double)" TX=Double TY=Double Width=720 Height=576 />
+    </div>
+
+    <div style="width: 720px;">
+        <Plot Data=@plot5 T="(string, LocalDate, double)" TX=LocalDate TY=Double Width=720 Height=576 />
     </div>
 }
 
 @code {
-
-    private TS[] data;
-
-    Data<TS, double, double> map;
-
-    Source<StatPoint> source = new Source<StatPoint>();
-    Data<StatPoint, LocalDate, double> ts;
-    GGNet.Components.Plot<StatPoint, LocalDate, double> plot;
-
-    string country;
-    bool clicked = false;
+    Data<TS, double, double> plot;
+    Data<(TS ts, double age), double, double> plot2;
+    Data<(TS ts, double obesity), double, double> plot3;
+    Data<(TS ts, double probability), double, double> plot4;
+    Data<(string continent, LocalDate date, double deaths), LocalDate, double> plot5;
 
     protected override async Task OnInitializedAsync()
     {
-        var json = await Http.GetStringAsync("https://gist.githubusercontent.com/pablofrommars/fe23999f2b857fcf0ed4b854f6d5316f/raw/44727f3f99fe9758b81ac52a029ad7d2881137fe/covid19.json");
-        var options = (new JsonSerializerOptions()).ConfigureForNodaTime(DateTimeZoneProviders.Tzdb);
-        data = JsonSerializer.Deserialize<TS[]>(json, options);
+        var data = await GetData();
+        var ageData = await GetAgeData();
+        var obesityData = await GetObesityData();
+        var probabilityData = await GetProbabilityData();
 
-        var theme = Theme.Default(dark: false);
+        plot = Plot.New(data.Where(o => o.DeathsCumulative >= 5 && !string.IsNullOrEmpty(o.Country.Continent)), o => o.ConfirmedCumulative, o => o.DeathsCumulative)
+            .Title("Case Fatality Rate")
+            //.Geom_ABLine(new[] { 0.005, 0.01, 0.02, 0.05, 0.1 }, o => o, o => 0, o => $"{o:P2}".Replace(".00", ""), color: "rgba(0, 0, 0, 0.3)", lineType: LineType.Dotted)
+            .Geom_Point(size: 3, alpha: 0.5, animation: true)
+            .Scale_X_Log10()
+            .XLab("Confirmed Cases - Log")
+            .Scale_Y_Log10()
+            .YLab("Confirmed Deaths - Log")
+            .Scale_Color_Discrete(o => o.Country.Continent, Colors.Viridis)
+            .Theme(dark: false);
 
-        theme.Panel.Grid.Major.X.Alpha = 0.25;
-        theme.Panel.Grid.Minor.X.Alpha = 0.25;
-        theme.Panel.Grid.Major.Y.Alpha = 0.25;
-        theme.Panel.Grid.Minor.Y.Alpha = 0.25;
+        var age = data
+            .Where(o => o.Population > 0 && o.DeathsCumulative > 5 && !string.IsNullOrEmpty(o.Country.Continent))
+            .Join(ageData, o => o.Country.A3, o => o.a3, (o, p) => (ts: o, age: p.age60_))
+            .ToList();
 
-        theme.Animation.Point.Scale = 1.5;
+        var text = string.Join('\n', age
+            .Select(o => $"(continent: \"{o.ts.Country.Continent}\", age: {o.age / 100}, deaths: {o.ts.DeathsCumulative / o.ts.Population * 1000000.0}),")
+            .ToArray());
 
-        var capitals = new GGNet.Source<TS>(data);
+        var t = 1.9855;
+        var n = 86;
+        var mse = 0.4248488275613588;
+        var xavg = 0.170082554;
+        var sx = 0.0831531957;
+        var N = 100;
 
-        map = Plot.New(capitals, o => o.Position.Value.Long, y: o => o.Position.Value.Lat)
-            .Geom_Map(GGNet.Datasets.Coastline.Load(), o => o.Latitude, o => o.Longitude, fill: "grey", alpha: 0.1)
-            .Geom_Point(onclick: OnClick, color: "#000000", alpha: 0.5, animation: true)
-            .Scale_X_Continuous(limits: (-180, 180), expand: (0, 0, 0, 0), formatter: GGNet.Formats.Latitude.Instance)
-            .Scale_Y_Continuous(limits: (-90, 90), expand: (0, 0, 0, 0), formatter: GGNet.Formats.Longitude.Instance)
-            .Scale_Color_Discrete(o => o.Continent.Value, Colors.Viridis, guide: false)
-            .Scale_Size_Continuous(o => o.Points.Last().Confirmed, range: (1, 10), guide: false)
-            .Theme(theme);
+        double CI(double x) => t * Math.Sqrt(n / (n - 2.0) * mse) * Math.Sqrt(1.0 / n + (x - xavg) * (x - xavg) / ((n - 1.0) * sx * sx));
 
-        ts = Plot.New(source, o => o.Date, o => o.Value)
-            .Geom_Line(tooltip: o => $"<b>{o.Date.ToString()}<b><br/>{o.Stat}: {o.Value:#,##0}", width: 2)
-            .Scale_Color_Discrete(o => o.Stat, Colors.Ipsum, guide: true)
-            .Title(" ")
-            .Theme(dark: false, legend: GGNet.Position.Bottom);
-    }
+        plot2 = Plot.New(age, o => o.age / 100, o => o.ts.DeathsCumulative / o.ts.Population * 1000000.0)
+            .Title("Covid19 - Proportion of Population above 60")
+            .SubTitle("R² =0.4")
+            .Geom_Ribbon(Enumerable.Range(0, N).Select(o => o * 0.4 / N), o => o, o => Math.Pow(10.0, 6.37009 * o - 0.540860355 - CI(o)), o => Math.Pow(10.0, 6.37009 * o - 0.540860355 + CI(o)), tooltip: o => "Tooltip", fill: "rgba(0, 0, 0, 0.05)", scale: (false, true))
+            .Geom_ABLine(new[] { (a: 6.37009, b: -0.540860355) }, o => o.a, o => o.b, o => $"y = {o.a:N2}x {o.b:N2}", transformation: (false, false), color: "rgba(0, 0, 0, 0.3)")
+            .Geom_Point(size: 3, alpha: 0.5, animation: true)
+            .Scale_X_Continuous(format: "P0")
+            .Scale_Y_Log10()
+            .YLab("Confirmed Deaths / Million - Log")
+            .Scale_Color_Discrete(o => o.ts.Country.Continent, Colors.Viridis)
+            .Theme(dark: false);
 
-    public async Task OnClick(TS point, MouseEventArgs e)
-    {
-        clicked = true;
-        country = point.Country;
+        var obesity = data
+           .Where(o => o.Population > 0 && o.DeathsCumulative > 5 && !string.IsNullOrEmpty(o.Country.Continent))
+           .Join(obesityData, o => o.Country.A3, o => o.a3, (o, p) => (ts: o, obesity: p.obesity))
+           .ToList();
 
-        source.Clear();
+        plot3 = Plot.New(obesity, o => o.obesity, o => o.ts.DeathsCumulative / o.ts.Population * 1000000.0)
+            .Geom_Point(size: 3, alpha: 0.5, animation: true)
+            .Scale_Y_Log10()
+            .YLab("Confirmed Deaths / Million - Log")
+            .Scale_Color_Discrete(o => o.ts.Country.Continent, Colors.Viridis)
+            .Theme(dark: false);
 
-        foreach (var p in point.Points)
-        {
-            source.Add(new StatPoint
-            {
-                Stat = Stat.Confirmed,
-                Date = p.Date,
-                Value = p.Confirmed
-            });
+        var probability = data
+           .Where(o => o.Population > 0 && o.DeathsCumulative > 5 && !string.IsNullOrEmpty(o.Country.Continent))
+           .Join(probabilityData, o => o.Country.A3, o => o.a3, (o, p) => (ts: o, probability: p.probability))
+           .ToList();
 
-            source.Add(new StatPoint
-            {
-                Stat = Stat.Deaths,
-                Date = p.Date,
-                Value = p.Deaths
-            });
+        plot4 = Plot.New(probability, o => o.probability, o => o.ts.DeathsCumulative / o.ts.Population * 1000000.0)
+            .Geom_Point(size: 3, alpha: 0.5, animation: true)
+            .Scale_Y_Log10()
+            .YLab("Confirmed Deaths / Million - Log")
+            .Scale_Color_Discrete(o => o.ts.Country.Continent, Colors.Viridis)
+            .Theme(dark: false);
 
-            source.Add(new StatPoint
-            {
-                Stat = Stat.Recovered,
-                Date = p.Date,
-                Value = p.Recovered
-            });
-        }
+        var continents = data
+            .Where(o => !string.IsNullOrEmpty(o.Country.Continent))
+            .SelectMany(o => o.Points.Select(p => (continent: o.Country.Continent, date: p.Date, deaths: p.DeathsCumulative)))
+            .GroupBy(o => o.continent)
+            .SelectMany(g => g.GroupBy(o => o.date).Select(o => (continent: g.Key, date: o.Key, deaths: o.Sum(p => p.deaths))))
+            .OrderBy(o => o.date)
+            .ThenBy(o => o.continent)
+            .ToList();
 
-        ts.Title(country);
-
-        StateHasChanged();
-
-        await plot.RefreshAsync();
-    }
-
-    public class Option<T>
-    {
-        public T Value { get; set; }
-    }
-
-    public class Position
-    {
-        public double Lat { get; set; }
-        public double Long { get; set; }
-    }
-
-    public class Point
-    {
-        public LocalDate Date { get; set; }
-
-        public double Confirmed { get; set; }
-        public double Deaths { get; set; }
-        public double Recovered { get; set; }
-    }
-
-    public class TS
-    {
-        public string Country { get; set; }
-
-        public Option<string> Continent { get; set; }
-
-        public Option<Position> Position { get; set; }
-
-        public Point[] Points { get; set; }
-
-    }
-
-    public enum Stat
-    {
-        Confirmed,
-        Deaths,
-        Recovered
-    }
-
-    public class StatPoint
-    {
-        public Stat Stat { get; set; }
-
-        public LocalDate Date { get; set; }
-
-        public double Value { get; set; }
+        plot5 = Plot.New(continents, o => o.date, o => o.deaths)
+            .Geom_Area(position: PositionAdjustment.Stack)
+            //.XLim(new LocalDate(2020, 2, 15))
+            .Scale_Y_Continuous(format: "#,##0")
+            .Scale_Fill_Discrete(o => o.continent, Colors.Viridis)
+            .Theme(dark: false);
     }
 }

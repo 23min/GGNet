@@ -39,6 +39,12 @@ namespace GGNet
 
         protected void Set(int i, T item) => pages[i / pageCapacity][i % pageCapacity] = item;
 
+        public T this[int i]
+        {
+            get => Get(i);
+            set => Set(i, value);
+        }
+
         public abstract void Add(T item);
 
         public void Add(IEnumerable<T> items)
@@ -92,13 +98,15 @@ namespace GGNet
         { 
         }
         
-        public T this[int i]
-        {
-            get => Get(i);
-            set => Set(i, value);
-        }
-
         public override void Add(T item) => Append(item);
+
+        public void Add(Buffer<T> buffer)
+        {
+            for (var i = 0; i < buffer.Count; i++)
+            {
+                Add(buffer[i]);
+            }
+        }
 
         public override int IndexOf(T item)
         {
@@ -127,8 +135,6 @@ namespace GGNet
             : base(pageCapacity, pagesIncrement, comparer)
         {
         }
-
-        public T this[int i] => Get(i);
 
         public override void Add(T item)
         {

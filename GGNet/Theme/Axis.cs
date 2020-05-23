@@ -27,21 +27,13 @@
                 {
                     X = new Text
                     {
-                        Size = new Size
-                        {
-                            Value = 0.75,
-                            Units = em
-                        },
+                        Size = new Size(0.75),
                         Anchor = middle
                     };
 
                     Y = new Text
                     {
-                        Size = new Size
-                        {
-                            Value = 0.75,
-                            Units = em
-                        },
+                        Size = new Size(0.75),
                         Anchor = axisY == Left ? end : start
                     };
 
@@ -66,7 +58,12 @@
             {
                 public _Title(bool dark, Position axisY)
                 {
-                    X = new Text { Anchor = end };
+                    X = new Text
+                    { 
+                        Anchor = end,
+                        Size = new Size(0.75)
+                    };
+
                     X.Margin.Top = 4;
                     X.Margin.Right = 4;
                     X.Margin.Bottom = 4;
@@ -76,7 +73,8 @@
                         Y = new Text
                         {
                             Angle = -90,
-                            Anchor = end
+                            Anchor = end,
+                            Size = new Size(0.75)
                         };
 
                         Y.Margin.Right = 4;
@@ -86,7 +84,8 @@
                         Y = new Text
                         {
                             Angle = 90,
-                            Anchor = start
+                            Anchor = start,
+                            Size = new Size(0.75)
                         };
 
                         Y.Margin.Top = 4;

@@ -2,13 +2,15 @@
 {
     using Elements;
 
+    using static LineType;
+
     public class _Panel
     {
         public _Panel(bool dark)
         {
             Background = new Rectangle
             {
-                Fill = dark ? "#252A32" : "#FFFFFF"
+                Fill = dark ? "#343a40" : "#FFFFFF"
             };
 
             var color = dark ? "#464950" : "#cccccc";
@@ -21,13 +23,15 @@
                     {
                         Width = 0.43,
                         Fill = color,
-                        Alpha = 1.0
+                        Alpha = 1.0,
+                        LineType = Solid
                     },
                     Y = new Line
                     {
                         Width = 0.43,
                         Fill = color,
-                        Alpha = 1.0
+                        Alpha = 1.0,
+                        LineType = Solid
                     }
                 },
                 Minor = new _Grid._GridXY
@@ -36,13 +40,15 @@
                     {
                         Width = 0.32,
                         Fill = color,
-                        Alpha = 1.0
+                        Alpha = 1.0,
+                        LineType = Solid
                     },
                     Y = new Line
                     {
                         Width = 0.32,
                         Fill = color,
-                        Alpha = 1.0
+                        Alpha = 1.0,
+                        LineType = Solid
                     }
                 },
             };

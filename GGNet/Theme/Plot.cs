@@ -13,47 +13,35 @@
             {
                 Background = new Rectangle
                 {
-                    Fill = dark ? "#252A32" : "#FFFFFF"
+                    Fill = dark ? "#343a40" : "#FFFFFF"
                 };
 
                 Title = new Text
                 {
-                    Size = new Size
-                    {
-                        Value = 1.125,
-                        Units = em
-                    },
+                    Size = new Size(1.125),
                     Anchor = start,
                     Weight = "bold",
-                    Color = dark ? "#FFFFFF" : "#2b2b2b"
+                    Color = dark ? "#FFFFFF" : "#212529"
                 };
 
                 Title.Margin.Bottom = 8;
 
                 SubTitle = new Text
                 {
-                    Size = new Size
-                    {
-                        Value = 0.8125,
-                        Units = em
-                    },
+                    Size = new Size(0.8125),
                     Anchor = start
                 };
 
                 if (!dark)
                 {
-                    SubTitle.Color = "#2b2b2b";
+                    SubTitle.Color = "#212529";
                 }
 
                 SubTitle.Margin.Bottom = 8;
 
                 Caption = new Text
                 {
-                    Size = new Size
-                    {
-                        Value = 0.75,
-                        Units = em
-                    },
+                    Size = new Size(0.75),
                     Anchor = end,
                     Style = "italic"
                 };
@@ -65,7 +53,7 @@
 
                 if (!dark)
                 {
-                    Caption.Color = "#2b2b2b";
+                    Caption.Color = "#212529";
                 }
             }
 

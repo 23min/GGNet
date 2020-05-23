@@ -1,4 +1,7 @@
 ﻿using System;
+using System.Threading.Tasks;
+
+using Microsoft.AspNetCore.Components.Web;
 
 using GGNet.Scales;
 using GGNet.Facets;
@@ -10,6 +13,8 @@ namespace GGNet.Geoms
         where TX : struct
         where TY : struct
     {
+        private readonly bool animation;
+
         public Hex(
             Source<T> source,
             Func<T, TX> x,
@@ -17,22 +22,28 @@ namespace GGNet.Geoms
             Func<T, TX> Dx,
             Func<T, TY> Dy,
             IAestheticMapping<T, string> fill = null,
+            Func<T, string> tooltip = null,
+            bool animation = false,
+            (bool x, bool y)? scale = null,
             bool inherit = true,
             Buffer<Shape> layer = null)
-            : base(source, inherit, layer)
+            : base(source, scale, inherit, layer)
         {
             Selectors = new _Selectors
             {
                 X = x,
                 Y = y,
                 Dx = Dx,
-                Dy = Dy
+                Dy = Dy,
+                Tooltip = tooltip
             };
 
             Aesthetics = new _Aesthetics
             {
                 Fill = fill
             };
+
+            this.animation = animation;
         }
 
         public class _Selectors
@@ -44,6 +55,8 @@ namespace GGNet.Geoms
             public Func<T, TX> Dx { get; set; }
 
             public Func<T, TY> Dy { get; set; }
+
+            public Func<T, string> Tooltip { get; set; }
         }
 
         public _Selectors Selectors { get; }
@@ -67,6 +80,14 @@ namespace GGNet.Geoms
         }
 
         public _Positions Positions { get; } = new _Positions();
+
+        public Func<T, MouseEventArgs, Task> OnClick { get; set; }
+
+        public Func<T, MouseEventArgs, Task> OnMouseOver { get; set; }
+
+        public Func<T, MouseEventArgs, Task> OnMouseOut { get; set; }
+
+        private Func<T, double, double, MouseEventArgs, Task> onMouseOver;
 
         public Elements.Rectangle Aesthetic { get; set; }
 
@@ -94,6 +115,33 @@ namespace GGNet.Geoms
 
             Positions.Dx = XMapping(Selectors.Dx, panel.X);
             Positions.Dy = YMapping(Selectors.Dy, panel.Y);
+
+            if (OnMouseOver == null && OnMouseOut == null && Selectors.Tooltip != null)
+            {
+                onMouseOver = (item, x, y, _) =>
+                {
+                    panel.Component.Tooltip.Show(
+                        x,
+                        y,
+                        0,
+                        Selectors.Tooltip(item),
+                        Aesthetics.Fill?.Map(item) ?? Aesthetic.Fill,
+                        Aesthetic.Alpha);
+
+                    return Task.CompletedTask;
+                };
+
+                OnMouseOut = (_, __) =>
+                {
+                    panel.Component.Tooltip.Hide();
+
+                    return Task.CompletedTask;
+                };
+            }
+            else if (OnMouseOver != null)
+            {
+                onMouseOver = (item, _, __, e) => OnMouseOver(item, e);
+            }
 
             if (!inherit)
             {
@@ -142,6 +190,12 @@ namespace GGNet.Geoms
 
             var hex = new Polygon
             {
+                Classes = animation ? "animate-hex" : string.Empty,
+                Path = new Geospacial.Polygon
+                {
+                    Longitude = new[] { x + dx, x + dx, x, x - dx, x - dx, x },
+                    Latitude = new[] { y + dy, y - dy, y - 2.0 * dy, y - dy, y + dy, y + 2.0 * dy }
+                },
                 Aesthetic = new Elements.Rectangle
                 {
                     Fill = fill,
@@ -149,17 +203,32 @@ namespace GGNet.Geoms
                 }
             };
 
+            if (OnClick != null)
+            {
+                hex.OnClick = e => OnClick(item, e);
+            }
+
+            if (onMouseOver != null)
+            {
+                hex.OnMouseOver = e => onMouseOver(item, x, y, e);
+            }
+
+            if (OnMouseOut != null)
+            {
+                hex.OnMouseOut = e => OnMouseOut(item, e);
+            }
+
             Layer.Add(hex);
 
-            hex.Points.Add((x + dx, y + dy));
-            hex.Points.Add((x + dx, y - dy));
-            hex.Points.Add((x, y - 2.0 * dy));
-            hex.Points.Add((x - dx, y - dy));
-            hex.Points.Add((x - dx, y + dy));
-            hex.Points.Add((x, y + 2 * dy));
+            if (scale.x)
+            {
+                Positions.X.Position.Shape(x - dx, x + dx);
+            }
 
-            Positions.X.Position.Shape(x - dx, x + dx);
-            Positions.Y.Position.Shape(y - 2.0 * dy, y + 2.0 * dy);
+            if (scale.y)
+            {
+                Positions.Y.Position.Shape(y - 2.0 * dy, y + 2.0 * dy);
+            }
         }
     }
 }
